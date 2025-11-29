@@ -1,40 +1,53 @@
-# OL Invocation Tools (sandbox)
+# OL Invocation Tools
 
-Phase-1 goal: make invoking functions trivial from the terminal while staying portable (works against a mock server and the real OpenLambda worker once pointed via OL_URL).
+## Overview
 
-Note: This is an active sandbox. I’ll keep iterating (nicer flags, docs, examples) and then upstream the pieces to OpenLambda after feedback.
+The **OL Invocation Tools** project is a lightweight, endpoint-agnostic command-line interface (CLI) for invoking functions on a local or remote worker (e.g., OpenLambda). Instead of crafting long `curl` commands, it provides a clean UX like:
 
-What’s included today
+```bash
+ol invoke <func> --data '{"x":1}' --pretty
 
-ol CLI (editable install): invoke subcommand with:
+Phase 1 focuses on developer experience and portability: JSON and file payloads, custom headers, pretty output, and a smoke script that targets any worker via OL_URL. A tiny mock worker is included so you can demo the CLI without spinning up the full OpenLambda stack.
 
-Input sources: --data (inline JSON), --json <file>, --file <path>
+Features
 
-Request options: --header "K: V", --timeout <seconds>, --url <base>, --pretty
+Friendly CLI: Replace complex curl with ol invoke <func>.
 
-Exit code mirrors HTTP status class (0 on 2xx; non-zero otherwise)
+Flexible Inputs: Send payloads via --data (inline JSON), --json <file>, or --file <path>.
 
-Mock worker: tiny Python HTTP server to test the CLI locally.
+Headers & Timeout: Add --header "K: V" and tune --timeout.
 
-Smoke script: one command that runs 3 invocations and asserts success (works against any base URL via OL_URL).
+Pretty Output: Use --pretty to format JSON responses.
 
-Requirements
+Endpoint-Agnostic: Point to any base URL with --url or OL_URL.
 
-macOS/Linux with Python 3.9+
+Smoke Test: A one-command script validates the CLI end-to-end.
 
-(Optional) Go/Docker for later when testing against the real OpenLambda worker
+Mock Worker: Minimal HTTP server for local testing and demos.
 
-Quickstart
-1) Create and activate a virtual environment
+Setup Instructions
+
+Clone the Repository:
+
+git clone https://github.com/fairozkhan10/ol-invocation-tools.git
+cd ol-invocation-tools
+
+
+Set Up a Python Virtual Environment:
+
 python3 -m venv .venv
 source .venv/bin/activate
 python -V
 
-2) Install the CLI (editable)
+
+Install the CLI (Editable):
+
 pip install -e .
 ol --help
 
-3) Start the mock worker (Terminal A — leave running)
+
+Run the Mock Worker (Terminal A — keep it running):
+
 python - <<'PY'
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json, re
@@ -52,75 +65,94 @@ print("mock worker on http://127.0.0.1:5000 ...")
 HTTPServer(("127.0.0.1", 5000), H).serve_forever()
 PY
 
-4) Invoke from the CLI (Terminal B)
-# inline JSON
+
+Use the CLI (Terminal B):
+
+# Inline JSON payload
 ol invoke echo --data '{"hello":"ol"}' --pretty
 
-# JSON from file
+# JSON from a file
 echo '{"a":123}' > payload.json
 ol invoke echo --json payload.json --pretty
 
-# binary payload with custom header
+# Binary payload with a custom header
 echo "hello-bytes" > input.bin
 ol invoke echo --file input.bin --header "X-Demo: test"
 
-5) One-command smoke test
+
+Run the Smoke Test:
+
 ./scripts/smoke.sh
-# output:
+# Expected:
 # [smoke] using BASE_URL=http://127.0.0.1:5000
 # [smoke] OK
 
-Environment variables
+Usage Guidelines
 
-OL_URL — base URL for the worker (default: http://127.0.0.1:5000)
+Basic Invocation: Use inline JSON for quick tests.
+
+ol invoke <func> --data '{"k":"v"}'
+
+
+Switch Endpoints: Target a different worker by URL or environment.
+
+Per call:
+
+ol invoke echo --url http://127.0.0.1:3000 --data '{}'
+
+
+Via environment:
 
 export OL_URL=http://127.0.0.1:3000
 ./scripts/smoke.sh
 
-Usage reference
-ol invoke <func> [--data JSON] [--json FILE] [--file PATH] \
-              [--header "K: V"] [--timeout SECONDS] \
-              [--pretty] [--url BASE]
+
+Headers, Timeout, Pretty Output: Add headers, adjust timeout, and pretty-print.
+
+ol invoke echo --data '{}' --header "X-Trace: 1" --timeout 10 --pretty
 
 
---data expects a JSON string.
+Exit Codes:
 
---json reads JSON from a file.
+0 — success (HTTP 2xx)
 
---file sends raw bytes and sets Content-Type: application/octet-stream.
+1 — non-2xx response
 
---header can be repeated to add multiple headers.
+2 — bad CLI input (e.g., malformed --header)
 
---url overrides OL_URL just for this call.
+>=3 — network/other errors
 
-Exit status:
+Project Structure
 
-0 = success (HTTP 2xx)
+ol-invocation-tools/
+├── cli/
+│ └── ol/
+│ └── cli.py # 'ol' CLI (argparse + urllib)
+├── docs/
+│ └── invocation-tools.md # Detailed usage & notes
+├── examples/ # (Placeholder) sample functions
+├── scripts/
+│ └── smoke.sh # Endpoint-agnostic smoke test
+├── pyproject.toml # Packaging (entrypoint 'ol')
+└── README.md # Project documentation
 
-1 = non-2xx response
+Future Enhancements
 
-2 = bad CLI input (e.g., malformed header)
+Real OpenLambda Integration: Confirm official route/headers (e.g., /invoke/<func> vs /run/<func>) and align defaults or add a --path flag.
 
->= 3 = network/other errors
+Examples: Add a tiny echo/WSGI example wired to the real worker.
 
-Repo layout (current)
-.
-├─ cli/ol/cli.py          # 'ol' CLI (argparse + urllib)
-├─ docs/invocation-tools.md
-├─ examples/              # placeholder for tiny sample functions
-├─ scripts/smoke.sh       # endpoint-agnostic smoke test
-├─ pyproject.toml         # packaging (editable install) -> 'ol' entrypoint
-└─ README.md
+Developer Experience: Retries/backoff, richer error messages, streaming output.
 
-Next steps (planned)
+Docs & Demos: Short GIF/asciinema demo and a troubleshooting guide.
 
-Confirm the exact HTTP route/headers expected by the real OpenLambda worker and align defaults (or add a --path flag).
+Upstream Plan: After feedback, open a focused PR to open-lambda/open-lambda (CLI + docs + example).
 
-Add a tiny example function (e.g., echo/WSGI) wired to the real worker.
+Contact
 
-Record a short demo (GIF/asciinema) and propose upstream placement (CLI + docs + example).
+For any queries or suggestions, feel free to contact me at:
 
-Expand docs with troubleshooting, return-code matrix, and integration snippets.
+Email: fkhan35@wisc.edu
 
-Last updated: 2025-11-29 — more changes to come after testing against the real OpenLambda worker.
-MD
+GitHub: https://github.com/fairozkhan10
+
